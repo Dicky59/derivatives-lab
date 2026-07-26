@@ -12,7 +12,6 @@ the cost of that approximation gets measured against Alpaca's own greeks/IV.
 
 import argparse
 import logging
-import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,7 +19,6 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import config
 
 from src.pricing.black_scholes import bs_greeks

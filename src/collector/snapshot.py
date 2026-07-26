@@ -17,7 +17,6 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import config
 
 from alpaca.common.exceptions import APIError
