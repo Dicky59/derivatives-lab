@@ -1,21 +1,28 @@
-# After creating the venv: pip install -r requirements.txt && pip install -e .
 alpaca-py==0.43.5
 annotated-types==0.8.0
 certifi==2026.7.22
 charset-normalizer==3.4.9
+colorama==0.4.6
+-e git+https://github.com/Dicky59/derivatives-lab.git@8486605ea86cea662b60d8f24ae01593cb54533d#egg=derivatives_lab
 duckdb==1.5.5
 idna==3.18
+iniconfig==2.3.0
 msgpack==1.2.1
 numpy==2.5.1
+packaging==26.2
 pandas==3.0.5
+pluggy==1.6.0
 pyarrow==25.0.0
 pydantic==2.13.4
 pydantic_core==2.46.4
+Pygments==2.20.0
+pytest==9.1.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
 pytz==2026.3.post1
 requests==2.34.2
 scipy==1.18.0
+setuptools==83.0.0
 six==1.17.0
 sseclient-py==1.9.0
 typing-inspection==0.4.2
@@ -23,3 +30,4 @@ typing_extensions==4.16.0
 tzdata==2026.3
 urllib3==2.7.0
 websockets==16.1.1
+wheel==0.47.0
