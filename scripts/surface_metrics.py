@@ -67,7 +67,9 @@ for m in skew_metrics(fit, slices):
     print(f"  {m['T']:.3f}  {m['atm_skew_slope']:+.4f}   "
           f"{m['rr_proxy_10pct']:+.4f}   {m['put_wing_vol']:.4f}   {m['call_wing_vol']:.4f}")
 
-print("\n=== IV RANK (scaffold) ===")
-# History will come from past snapshots later; for now, just today's front vol.
-rank = iv_rank(ts["front_atm_vol"], history_atm_vols=[ts["front_atm_vol"]])
+print("\n=== IV RANK ===")
+from src.pricing.metrics import build_atm_history
+history = build_atm_history("data/derived/date=*/enriched_*.parquet", r, q)
+vols = [h["atm_vol"] for h in history if h["atm_vol"] is not None]
+rank = iv_rank(ts["front_atm_vol"], history_atm_vols=vols)
 print(f"  {rank}")
