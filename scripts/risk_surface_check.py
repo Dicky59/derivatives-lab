@@ -4,7 +4,7 @@ import numpy as np
 import duckdb
 
 from src.pricing.ssvi import fit_ssvi_surface
-from src.risk.position import stress_grid, stress_grid_surface
+from src.risk.position import stress_grid, stress_grid_surface, fitted_k_range
 import config
 
 r, q = config.RISK_FREE_RATE, config.DIVIDEND_YIELD
@@ -33,8 +33,9 @@ for _, row in expiries.iterrows():
     slices.append({"theta":(iv_atm**2)*T,"k":k,"w":w,"T":T})
 slices.sort(key=lambda s:s["T"])
 fit = fit_ssvi_surface(slices)
-surface = {"rho":fit["rho"], "eta":fit["eta"], "gamma":fit["gamma"],
-           "theta_by_T":[(s["T"], s["theta"]) for s in slices]}
+surface = {"rho": fit["rho"], "eta": fit["eta"], "gamma": fit["gamma"],
+           "theta_by_T": [(s["T"], s["theta"]) for s in slices],
+           "k_range": fitted_k_range(slices)}     # <-- added
 print(f"Surface: rho={fit['rho']:+.3f} eta={fit['eta']:.3f} gamma={fit['gamma']:.3f}, "
       f"S={S:.2f}\n")
 
@@ -65,7 +66,7 @@ def show(grid, worst, base, label):
     print(f"  worst: {worst['pnl']:+.0f} at spot {worst['spot_shock']:+.0%} vol {worst['vol_shock']:+.0%}\n")
 
 g1,w1,b1 = stress_grid(position, S, r, q)
-g2,w2,b2 = stress_grid_surface(position, S, r, q, surface)
+g2,w2,b2,_ = stress_grid_surface(position, S, r, q, surface)
 show(g1, w1, b1, "STICKY-STRIKE (frozen IV)")
 show(g2, w2, b2, "STICKY-MONEYNESS (surface-aware)")
 print(f"Worst-case difference: sticky-strike {w1['pnl']:+.0f} vs surface {w2['pnl']:+.0f}")
