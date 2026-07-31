@@ -8,6 +8,8 @@ from src.risk.position import (stress_grid_surface, surface_iv, net_greeks,
                                fitted_k_range)
 from src.signals.term_structure import term_structure_signal
 from src.signals.skew_richness import skew_richness_signal
+from src.signals.iv_rank_signal import iv_rank_signal
+from src.pricing.metrics import build_atm_history
 import config
 
 r, q = config.RISK_FREE_RATE, config.DIVIDEND_YIELD
@@ -81,6 +83,26 @@ else:
 print(f"  confidence:  {sk['confidence']}")
 print(f"  falsifies if: {sk['falsification']}")
 print(f"  note: {sk['anchor_B_note']}")
+
+# --- IV-rank signal (uses accumulated history) ---
+history = build_atm_history("data/derived/date=*/enriched_*.parquet", r, q)
+vols = [h["atm_vol"] for h in history if h["atm_vol"] is not None]
+# today's front ATM vol = the front slice's ATM vol from the current surface
+front_vol = float(np.sqrt(slices[0]["theta"] / slices[0]["T"]))
+
+ivr = iv_rank_signal(front_vol, vols)
+print(f"\n[{ivr['signal']}]")
+if ivr["status"] == "scaffold":
+    print(f"  {ivr['message']}")
+    print(f"  confidence: {ivr['confidence']}")
+else:
+    print(f"  regime: {ivr['regime']}   IV rank: {ivr['iv_rank']:.2f}   "
+          f"percentile: {ivr['iv_percentile']:.2f}")
+    print(f"  current vol {ivr['current_vol']:.4f}  (range {ivr['hist_low']:.4f}"
+          f"-{ivr['hist_high']:.4f}, n={ivr['n']})")
+    print(f"  implication: {ivr['implication']}")
+    print(f"  confidence:  {ivr['confidence']}")
+    print(f"  falsifies if: {ivr['falsification']}")
 
 # --- Candidate structure + M4 risk, if the signal suggests one ---
 if sig["candidate_structure"] == "calendar_or_short_near_premium":
