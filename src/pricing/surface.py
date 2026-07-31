@@ -7,13 +7,15 @@ constraint across expiries) so calendar-arbitrage crossings are expected —
 reported as a diagnostic, not repaired (that's M3.3).
 """
 import re
-
+import glob
 import duckdb
 import numpy as np
 import pandas as pd
 
 import config
 from src.pricing.svi import svi_raw, fit_svi
+from src.pricing.ssvi import fit_ssvi_surface
+from src.risk.position import fitted_k_range
 
 T_MIN_DAYS, T_MAX_DAYS = 7, 90   # expiry selection window
 MONEYNESS_BAND = 0.15            # near-money: strike within +/-15% of spot
@@ -166,3 +168,53 @@ def scan_calendar_arbitrage(surface_df, k_grid=None):
 
     violation_T_range = (min(violation_Ts), max(violation_Ts)) if violation_Ts else None
     return {"n_violations": n_violations, "violation_T_range": violation_T_range}
+
+def load_latest_surface():
+    """
+    Load the most recent derived snapshot, fit the SSVI surface, and return
+    everything downstream consumers need. Single source of truth — API,
+    scripts, and dashboards all call this instead of each re-implementing it.
+
+    Returns dict: {path, S, slices, surface, snapshot_ts}
+    """
+    r, q = config.RISK_FREE_RATE, config.DIVIDEND_YIELD
+    paths = sorted(glob.glob("data/derived/date=*/enriched_*.parquet"))
+    if not paths:
+        raise FileNotFoundError("No derived snapshots under data/derived/")
+    path = paths[-1]
+
+    con = duckdb.connect(); con.execute("SET TimeZone='UTC'")
+    snapshot_ts = con.execute(
+        f"SELECT min(snapshot_ts_utc) FROM read_parquet('{path}')").fetchone()[0]
+    exp = con.execute(f"""SELECT DISTINCT expiry,T_used FROM read_parquet('{path}')
+        WHERE status='ok' AND iv_mid IS NOT NULL ORDER BY expiry""").df()
+
+    slices, S = [], None
+    for _, row in exp.iterrows():
+        T = row["T_used"]
+        if not (7/365 <= T <= 365/365):
+            continue
+        df = con.execute(f"""SELECT strike,iv_mid,underlying_price,(iv_ask-iv_bid) AS band
+            FROM read_parquet('{path}') WHERE status='ok' AND expiry='{row["expiry"]}'
+            AND iv_mid IS NOT NULL""").df()
+        S = df["underlying_price"].iloc[0]
+        df = df[(df["strike"] >= 0.85*S) & (df["strike"] <= 1.15*S)]
+        thr = min(np.median(df["band"])*3.0, 0.15); df = df[df["band"] <= thr]
+        if len(df) < 15:
+            continue
+        F = S*np.exp((r-q)*T)
+        k = np.log(df["strike"].values/F)
+        w = (df["iv_mid"].values**2)*T
+        near = np.abs(k) < 0.03
+        iv = (np.polyval(np.polyfit(k[near], df["iv_mid"].values[near], 2), 0.0)
+              if near.sum() >= 3 else df["iv_mid"].values[np.argmin(np.abs(k))])
+        slices.append({"theta": (iv**2)*T, "k": k, "w": w, "T": T})
+    con.close()
+
+    slices.sort(key=lambda s: s["T"])
+    fit = fit_ssvi_surface(slices)
+    surface = {"rho": fit["rho"], "eta": fit["eta"], "gamma": fit["gamma"],
+               "theta_by_T": [(s["T"], s["theta"]) for s in slices],
+               "k_range": fitted_k_range(slices)}
+    return {"path": path, "S": float(S), "slices": slices,
+            "surface": surface, "snapshot_ts": snapshot_ts}
