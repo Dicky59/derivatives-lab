@@ -7,6 +7,7 @@ from src.pricing.ssvi import fit_ssvi_surface
 from src.risk.position import (stress_grid_surface, surface_iv, net_greeks,
                                fitted_k_range)
 from src.signals.term_structure import term_structure_signal
+from src.signals.skew_richness import skew_richness_signal
 import config
 
 r, q = config.RISK_FREE_RATE, config.DIVIDEND_YIELD
@@ -62,6 +63,24 @@ print(f"  slope/yr: {sig['slope_per_year']:+.4f}   front {sig['front_vol']:.4f} 
 print(f"  implication: {sig['implication']}")
 print(f"  confidence:  {sig['confidence']}")
 print(f"  falsifies if: {sig['falsification']}")
+
+# --- Skew-richness signal ---
+sk = skew_richness_signal(slices, surface)
+print(f"\n[{sk['signal']}]")
+print(f"  {sk['summary']}")
+print(f"  skew term structure (T, skew_slope):")
+for T, skew in sk["skew_by_T"]:
+    print(f"    T={T:.3f}  skew={skew:+.3f}")
+if sk["flags"]:
+    print(f"  FLAGGED anomalies (|z| >= 2):")
+    for f in sk["flags"]:
+        print(f"    T={f['T']:.3f}: {f['kind']}  skew={f['skew']:+.3f} "
+              f"vs fitted {f['fitted_skew']:+.3f}  (z={f['z']:+.2f})")
+else:
+    print(f"  (skew term structure is smooth — no dislocations)")
+print(f"  confidence:  {sk['confidence']}")
+print(f"  falsifies if: {sk['falsification']}")
+print(f"  note: {sk['anchor_B_note']}")
 
 # --- Candidate structure + M4 risk, if the signal suggests one ---
 if sig["candidate_structure"] == "calendar_or_short_near_premium":
