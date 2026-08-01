@@ -92,21 +92,78 @@ export default function Home() {
               </p>
             </section>
 
-            {/* Skew richness */}
-            <section className="rounded-lg bg-slate-900 border border-slate-800 p-5 mb-4">
+            {/* Skew richness — shows flag detail when it fires */}
+            <section
+              className={`rounded-lg border p-5 mb-4 ${data.skew_richness.flags.length > 0
+                  ? "bg-amber-950/30 border-amber-700/50"
+                  : "bg-slate-900 border-slate-800"
+                }`}
+            >
               <div className="flex items-baseline justify-between">
                 <h2 className="text-sm uppercase tracking-wide text-slate-400">
                   Skew Richness
                 </h2>
-                <span className="text-lg font-semibold text-slate-200">
+                <span
+                  className={`text-lg font-semibold ${data.skew_richness.flags.length > 0
+                      ? "text-amber-400"
+                      : "text-emerald-400"
+                    }`}
+                >
                   {data.skew_richness.flags.length === 0
                     ? "SMOOTH"
                     : `${data.skew_richness.flags.length} FLAGGED`}
                 </span>
               </div>
+
               <p className="mt-2 text-sm text-slate-400">
                 {data.skew_richness.summary}
               </p>
+
+              {/* Flag detail table — only when something fired */}
+              {data.skew_richness.flags.length > 0 && (
+                <div className="mt-3 rounded bg-slate-950/50 border border-slate-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs uppercase tracking-wide text-slate-500 border-b border-slate-800">
+                        <th className="text-left px-3 py-2">Expiry (T, yrs)</th>
+                        <th className="text-left px-3 py-2">Kind</th>
+                        <th className="text-right px-3 py-2">Skew</th>
+                        <th className="text-right px-3 py-2">Fitted</th>
+                        <th className="text-right px-3 py-2">z-score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.skew_richness.flags.map((f, i) => (
+                        <tr key={i} className="border-b border-slate-800/50 last:border-0">
+                          <td className="px-3 py-2 font-mono">{f.T.toFixed(3)}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={
+                                f.kind.startsWith("RICH")
+                                  ? "text-amber-400"
+                                  : "text-sky-400"
+                              }
+                            >
+                              {f.kind}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            {f.skew.toFixed(3)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-slate-400">
+                            {f.fitted_skew.toFixed(3)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono">
+                            {f.z >= 0 ? "+" : ""}
+                            {f.z.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               <p className="mt-2 text-xs text-slate-600">
                 {data.skew_richness.confidence}
               </p>
