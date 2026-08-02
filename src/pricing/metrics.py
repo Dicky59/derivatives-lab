@@ -8,7 +8,28 @@ import numpy as np
 import glob
 from pathlib import Path
 
-from src.pricing.ssvi import ssvi_surface, phi_powerlaw
+from src.pricing.ssvi import ssvi_surface
+
+def _is_trading_session(parquet_path, con, max_staleness_hours=6.0):
+    """
+    Is this snapshot a real trading session (fresh quotes), or a stale
+    weekend/holiday/off-hours capture?
+
+    On a live session the option quotes are fresh: quote_ts is within
+    max_staleness_hours of snapshot_ts. On a closed day (or a pre-market test
+    run) the collector still fires but captures stale quotes, so quote_ts lags
+    snapshot_ts by many hours. Returns (is_fresh, stale_hours).
+    """
+    row = con.execute(f"""
+        SELECT min(snapshot_ts_utc) AS snap_ts, max(quote_ts) AS latest_quote
+        FROM read_parquet('{parquet_path}')
+        WHERE status='ok' AND quote_ts IS NOT NULL
+    """).fetchone()
+    snap_ts, latest_quote = row[0], row[1]
+    if snap_ts is None or latest_quote is None:
+        return False, None
+    stale_hours = (snap_ts - latest_quote).total_seconds() / 3600.0
+    return (stale_hours <= max_staleness_hours), stale_hours
 
 
 def term_structure_metrics(slices):
@@ -152,12 +173,16 @@ def _front_atm_vol_from_snapshot(parquet_path, r, q, con,
     return ts, (best[1] if best else None)
 
 
-def build_atm_history(derived_glob, r, q):
+def build_atm_history(derived_glob, r, q, trading_sessions_only=True,
+                      max_staleness_hours=6.0):
     """
     Walk all derived snapshots matching derived_glob, extract front ATM vol from
-    each, and return a chronological list of {"ts": ..., "atm_vol": ..., "file": ...}.
+    each, and return a chronological list of {"ts", "atm_vol", "file"}.
 
-    derived_glob: e.g. "data/derived/date=*/enriched_*.parquet"
+    trading_sessions_only (default True): exclude stale weekend/holiday/off-hours
+    captures via quote-staleness, so IV rank / history / backtest all see only
+    real trading sessions. Stale files stay on disk (raw data immutable) but are
+    ignored analytically. Set False to include everything (e.g. for auditing).
     """
     import duckdb
     con = duckdb.connect()
@@ -166,8 +191,12 @@ def build_atm_history(derived_glob, r, q):
     paths = sorted(glob.glob(derived_glob))
     history = []
     for p in paths:
+        if trading_sessions_only:
+            is_fresh, _ = _is_trading_session(p, con, max_staleness_hours)
+            if not is_fresh:
+                continue                      # skip stale (closed-market) snapshot
         ts, vol = _front_atm_vol_from_snapshot(p, r, q, con)
         history.append({"ts": ts, "atm_vol": vol, "file": Path(p).name})
     con.close()
-    history.sort(key=lambda h: h["ts"])   # chronological by snapshot timestamp
+    history.sort(key=lambda h: h["ts"])
     return history
